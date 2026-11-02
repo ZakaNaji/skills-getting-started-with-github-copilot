@@ -12,20 +12,56 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      activitySelect.options.length = 1;
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
         const activityCard = document.createElement("div");
         activityCard.className = "activity-card";
 
-        const spotsLeft = details.max_participants - details.participants.length;
+        const spotsLeft =
+          details.max_participants - details.participants.length;
 
         activityCard.innerHTML = `
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          <div class="participants">
+            <h5>Participants <span>${details.participants.length}</span></h5>
+            <ul></ul>
+          </div>
         `;
+
+        const participantsList = activityCard.querySelector(".participants ul");
+        if (details.participants.length) {
+          details.participants.forEach((email) => {
+            const listItem = document.createElement("li");
+            const emailLabel = document.createElement("span");
+            emailLabel.textContent = email;
+
+            const removeButton = document.createElement("button");
+            removeButton.type = "button";
+            removeButton.className = "remove-participant";
+            removeButton.textContent = "×";
+            removeButton.setAttribute(
+              "aria-label",
+              `Remove ${email} from ${name}`,
+            );
+            removeButton.title = `Remove ${email} from ${name}`;
+            removeButton.addEventListener("click", () =>
+              unregisterParticipant(name, email),
+            );
+
+            listItem.append(emailLabel, removeButton);
+            participantsList.appendChild(listItem);
+          });
+        } else {
+          const emptyItem = document.createElement("li");
+          emptyItem.className = "empty";
+          emptyItem.textContent = "No participants yet";
+          participantsList.appendChild(emptyItem);
+        }
 
         activitiesList.appendChild(activityCard);
 
@@ -36,8 +72,31 @@ document.addEventListener("DOMContentLoaded", () => {
         activitySelect.appendChild(option);
       });
     } catch (error) {
-      activitiesList.innerHTML = "<p>Failed to load activities. Please try again later.</p>";
+      activitiesList.innerHTML =
+        "<p>Failed to load activities. Please try again later.</p>";
       console.error("Error fetching activities:", error);
+    }
+  }
+
+  async function unregisterParticipant(activity, email) {
+    try {
+      const response = await fetch(
+        `/activities/${encodeURIComponent(activity)}/signup?email=${encodeURIComponent(email)}`,
+        { method: "DELETE" },
+      );
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.detail || "Failed to unregister participant");
+      }
+
+      await fetchActivities();
+    } catch (error) {
+      messageDiv.textContent =
+        error.message || "Failed to unregister participant";
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
+      console.error("Error unregistering participant:", error);
     }
   }
 
@@ -53,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `/activities/${encodeURIComponent(activity)}/signup?email=${encodeURIComponent(email)}`,
         {
           method: "POST",
-        }
+        },
       );
 
       const result = await response.json();
@@ -62,6 +121,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        await fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
